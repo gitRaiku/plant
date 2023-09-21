@@ -24,7 +24,7 @@ COMPILE_FLAGS := -ggdb3 -Og -Wall -march=native -mtune=native -fmodulo-sched \
 								 -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/include/sysprof-4
 
 INCLUDE_FLAGS  := 
-LIBRARY_FLAGS  := -lwayland-client -lwayland-cursor -lfreetype -lfontconfig
+LIBRARY_FLAGS  := -lwayland-client -lwayland-cursor -lfreetype -lfontconfig -lm
 LD_FLAGS       := -O2
 
 xdgsh_XML      := $(PRT_DIR)/xml/xdg-shell.xml 
@@ -59,10 +59,13 @@ build: $(BIN_DIR) $(PROT_OBJ_NAMES) $(BIN_DIR)/$(TARGET)
 install: build
 	cp $(BIN_DIR)/$(TARGET) /usr/local/bin/$(TARGET)
 
-T := "Test herbe 1 2 3 4 1 12 31" 231 23 "日本通日本通日本通日本通日本通日本通" 1231 32
+T := "Tefgstww 1231" "日本酒はめっちゃ甘い"
 
 run: build
 	./$(BIN_DIR)/$(TARGET) $T
+
+valgrind: build
+	valgrind -v ./$(BIN_DIR)/$(TARGET) $T
 
 debug: build
 	gdb -q --args $(BIN_DIR)/$(TARGET) $T

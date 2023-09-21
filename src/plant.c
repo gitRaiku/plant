@@ -168,22 +168,46 @@ void cbufs(struct cmon *mon, uint32_t width, uint32_t height, enum wl_shm_format
   mon->sb.height = height;
 }
 
-uint8_t lerp(uint8_t t, uint8_t o1, uint8_t o2) {
-  return (uint8_t)((double)o1 * (1.0 - ((double)t/255.0))) + (o2 * ((double)t/255.0));
-}
+double __inline__ lerp(double t, double o1, double o2) { return (o1 * (1.0 - t)) + (o2 * t); }
 
-uint64_t ablend(uint8_t t, uint64_t fc, uint64_t bc) { /// TODO: Actual alpha blending
-#define CTG(a,b,c,d) {b=((a&0xFF0000)>>16);c=((a&0x00FF00)>>8);d=((a&0x0000FF)>>0);}
-  uint8_t r1, r2, r3, g1, g2, g3, b1, b2, b3;
+uint64_t ablend(uint64_t fc, uint64_t bc) {
+#define CTG(a,b,c,d) {b=(double)((a&0xFF0000)>>16)/255.0;c=(double)((a&0x00FF00)>>8)/255.0;d=(double)((a&0x0000FF)>>0)/255.0;}
+  double a1, a2, r1, r2, g1, g2, b1, b2;
   CTG(fc, r1, g1, b1);
   CTG(bc, r2, g2, b2);
-  r3 = lerp(255 - t, r1, r2);
-  g3 = lerp(255 - t, g1, g2);
-  b3 = lerp(255 - t, b1, b2);
-  return 0xFF000000 |
-        ((uint64_t)r3 << 16) |
-        ((uint64_t)g3 <<  8) |
-        ((uint64_t)b3 <<  0);
+  uint8_t r3, g3, b3;
+
+  a1 = (0.2126*r1 + 0.7152*g1 + 0.0722*b1);
+  a2 = 1.0;
+
+  double a3 = a1 + a2 * (1 - a1);
+
+  double a1p = a1            / a3;
+  double a2p = a2 * (1 - a1) / a3;
+  r3 = (r1 * a1p + r2 * a2p) * 255.0;
+  g3 = (g1 * a1p + g2 * a2p) * 255.0;
+  b3 = (b1 * a1p + b2 * a2p) * 255.0;
+
+  a3 = 255;
+
+  return ((uint64_t)a3 << 24) |
+         ((uint64_t)r3 << 16) |
+         ((uint64_t)g3 <<  8) |
+         ((uint64_t)b3 <<  0);
+#undef CTG
+}
+
+uint64_t cmul(uint64_t c1, uint64_t c2) {
+#define CTG(a,x,b,c,d) {x=(double)((a&0xFF000000)>>24)/255.0;b=(double)((a&0xFF0000)>>16)/255.0;c=(double)((a&0x00FF00)>>8)/255.0;d=(double)((a&0x0000FF)>>0)/255.0;}
+  double a1, a2, r1, r2, g1, g2, b1, b2;
+  CTG(c1, a1, r1, g1, b1);
+  CTG(c2, a2, r2, g2, b2);
+  uint8_t a3, r3, g3, b3;
+  a3 = (a1 * a2) * 255.0;
+  r3 = pow(r1 * r2, gammaCorrection) * 255.0;
+  g3 = pow(g1 * g2, gammaCorrection) * 255.0;
+  b3 = pow(b1 * b2, gammaCorrection) * 255.0;
+  return ((uint64_t)a3 << 24) | ((uint64_t)r3 << 16) | ((uint64_t)g3 << 8) | ((uint64_t)b3 << 0);
 #undef CTG
 }
 
@@ -191,16 +215,29 @@ void draw_char(struct cmon *mon, int32_t x, int32_t y, uint8_t cs, uint64_t fc, 
 #define CG fts.face[cs]->glyph
 #define CB fts.face[cs]->glyph->bitmap
 #define CM fts.face[cs]->glyph->metrics
+#define G(a,y,x,w) (a[((y)*(w))+x])
   int32_t i, j;
+  uint64_t col;
+  uint32_t cw = CB.width;
+  if (CB.pixel_mode == FT_PIXEL_MODE_LCD) {
+    cw /= 3;
+  }
+  //fprintf(stdout, "%u %u %u %u\n", CB.width, CB.pitch, CB.pixel_mode, cw);
   for (i = 0; i < CB.rows; ++i) {
     if ((i + y) < 0 || mon->sb.height <= (i + y)) {
       continue;
     }
-    for (j = 0; j < CB.width; ++j) {
+    for (j = 0; j < cw; ++j) {
       if ((j + x) < 0 || mon->sb.width <= (j + x)) {
         continue;
       }
-      mon->sb.data[(i + y) * mon->sb.width + j + x] = ablend(CB.buffer[i * CB.pitch + j], fc, bc);
+      if (CB.pixel_mode == FT_PIXEL_MODE_LCD) {
+        col = 0xFF000000 | ((uint64_t)CB.buffer[i * CB.pitch + j * 3] << 16) | ((uint64_t)CB.buffer[i * CB.pitch + j * 3 + 1] << 8) | ((uint64_t)CB.buffer[i * CB.pitch + j * 3 + 2]);
+      } else {
+        col = 0xFF000000 | ((uint64_t)CB.buffer[i * CB.pitch + j] << 16) | ((uint64_t)CB.buffer[i * CB.pitch + j] << 8) | ((uint64_t)CB.buffer[i * CB.pitch + j]);
+      }
+      G(mon->sb.data, i + y, j + x, mon->sb.width) = ablend(cmul(col, fc), bc);
+      //G(mon->sb.data, i + y, j + x, mon->sb.width) = ablend(0xFFFFFFFF, 0xFFFF0000);
     }
   }
 }
@@ -220,7 +257,7 @@ void draw_rect(struct cmon *mon, uint32_t x, uint32_t y, int32_t w, int32_t h, u
   }
 }
 
-int32_t draw_string(struct cmon *mon, const wchar_t *__restrict s, uint32_t x, uint32_t y, uint64_t fc, uint64_t bc, uint8_t render, uint8_t *__restrict used) { /// TODO: LCD filter
+int32_t draw_string(struct cmon *mon, const wchar_t *__restrict s, uint32_t x, uint32_t y, uint64_t fc, uint64_t bc, uint8_t render) { /// TODO: LCD filter
   int32_t i;
   int32_t px = 0;
   uint32_t cg;
@@ -229,22 +266,25 @@ int32_t draw_string(struct cmon *mon, const wchar_t *__restrict s, uint32_t x, u
   uint8_t pvt = 0;
   uint32_t pv = 0;
   FT_Vector kerning;
-  if (used) {
-    *used = 0;
-  }
 
   for(i = 0; i < strl; ++i) {
     cg = FT_Get_Char_Index(fts.face[0], s[i]); cs = 0;
     if (cg == 0) { cg = FT_Get_Char_Index(fts.face[1], s[i]); cs = 1; }
-    if (used) {
-      *used |= (cs + 1);
-    }
     FTCHECK(FT_Load_Glyph(fts.face[cs], cg, fts.i[cs].load_flags), "Could not load a glyph!");
-    FTCHECK(FT_Render_Glyph(CG, FT_RENDER_MODE_NORMAL), "Could not render a glyph!");
+
+    FTCHECK(FT_Render_Glyph(CG, FT_RENDER_MODE_LCD), "Could not render a glyph!");
+    //FTCHECK(FT_Render_Glyph(CG, FT_RENDER_MODE_LIGHT), "Could not render a glyph!");
+
+    /*if (fts.i[cs].lcd_filter && LCD) {
+      FTCHECK(FT_Render_Glyph(CG, FT_RENDER_MODE_LCD), "Could not render a glyph!");
+    } else {
+      FTCHECK(FT_Render_Glyph(CG, FT_RENDER_MODE_LIGHT), "Could not render a glyph!");
+    }*/
 
     if (render) {
       int32_t xoff =   CM.horiBearingX >> 6;
       int32_t yoff = -(CM.horiBearingY >> 6);
+      //fprintf(stdout, "Drawing %lc with %u\n", s[i], fts.i[cs].lcd_filter);
       draw_char(mon, x + px + xoff, y + yoff, cs, fc, bc);
     }
 
@@ -276,19 +316,25 @@ void render(struct cmon *mon, wchar_t *__restrict *__restrict lines, uint32_t lc
   
   {
     int32_t i;
-    uint8_t used;
     int32_t vt = 0;
     int32_t py;
     for(i = 0; i < lc; ++i) {
-      draw_string(mon, lines[i], 0, 0, 0, 0, 0, &used);
+      draw_string(mon, lines[i], 0, 0, 0, 0, 0);
       py = (fts.face[0]->height + fts.face[0]->descender) >> 6;
-      draw_string(mon, lines[i], borderThickness + hpad, borderThickness + vpad + py + vt, foreground_col, background_col, 1, &used);
+      draw_string(mon, lines[i], borderThickness + hpad, borderThickness + vpad + py + vt, foreground_col, background_col, 1);
       py = 0;
       py = (fts.face[0]->height >> 6) + linepad;
       vt += py;
-      fprintf(stdout, "%ls -> %u\n", lines[i], vt);
+      //fprintf(stdout, "%ls -> %u\n", lines[i], vt);
     }
   }
+
+  /*
+  draw_rect(mon, borderThickness, borderThickness + vpad, barWidth - borderThickness * 2, 1, 0xFFFF0000);
+  draw_rect(mon, borderThickness, borderThickness + vpad + ((fts.face[0]->height + fts.face[0]->descender) >> 6), barWidth - borderThickness * 2, 1, 0xFF00FF00);
+  draw_rect(mon, borderThickness, borderThickness + vpad, 4, fts.face[0]->height >> 6, 0xFF00FFFF);
+  draw_rect(mon, borderThickness + 4, borderThickness + vpad + ((fts.face[0]->height + fts.face[0]->descender) >> 6), 4, -fts.face[0]->descender >> 6, 0xFF0000FF);
+  */
 
   wl_surface_attach(mon->surf, mon->sb.b, 0, 0);
   wl_surface_damage(mon->surf, 0, 0, barWidth, barHeight);
@@ -361,7 +407,7 @@ uint8_t get_font_info(FcPattern *pattern, struct fontInfo *__restrict i) {
   WLCHECK(FcPatternGetDouble(pattern, FC_PIXEL_SIZE, 0, &psize)==FcResultMatch,"Could not get font pixel size!");
   QB(i->aa        , FC_ANTIALIAS      , FcTrue         );
   QI(i->rgba      , FC_RGBA           , FC_RGBA_UNKNOWN);
-  QI(i->lcd_filter, FC_LCD_FILTER     , FC_LCD_LIGHT   );
+  QI(i->lcd_filter, FC_LCD_FILTER     , FC_LCD_LIGHT   ); /// Kinda useless
   QB(i->embold    , FC_EMBOLDEN       , FcFalse        );
   QI(i->spacing   , FC_SPACING        , FC_PROPORTIONAL);
   QB(i->minspace  , FC_MINSPACE       , FcFalse        );
@@ -370,7 +416,7 @@ uint8_t get_font_info(FcPattern *pattern, struct fontInfo *__restrict i) {
   QB(hinting      , FC_HINTING        , FcTrue         );
   QI(hstyle       , FC_HINT_STYLE     , FC_HINT_SLIGHT );
   QB(vl           , FC_VERTICAL_LAYOUT, FcFalse        );
-  QB(ahint        , FC_AUTOHINT       , FcFalse        );
+  QB(ahint        , FC_AUTOHINT       , FcFalse        ); /// Kinda useless
   QB(gadv         , FC_GLOBAL_ADVANCE , FcTrue         );
 #undef QD
 #undef QB
@@ -379,30 +425,53 @@ uint8_t get_font_info(FcPattern *pattern, struct fontInfo *__restrict i) {
   i->ysize = psize * 64.0;
   i->xsize = psize * aspect * 64.0;
 
-  i->load_flags = FT_LOAD_DEFAULT | FT_LOAD_COLOR;
+  i->lcd_filter = 1;
+  i->aa = 1;
+  ahint = 1;
 
-  if (i->aa) { /// Code i defo didn't steal from libXft and i fully understand
-    if (FC_HINT_NONE < hstyle && hstyle < FC_HINT_FULL) {
+  if (i->aa) {
+    if ((FC_HINT_NONE < hstyle && hstyle < FC_HINT_FULL) && !i->lcd_filter) {
+      fprintf(stdout, "Add Target Light\n");
       i->load_flags |= FT_LOAD_TARGET_LIGHT;
     } else {
       switch (i->rgba) {
       case FC_RGBA_RGB:
       case FC_RGBA_BGR:
+        fprintf(stdout, "Add Target LCD\n");
         i->load_flags |= FT_LOAD_TARGET_LCD;
-        break;
-      case FC_RGBA_VRGB:
-      case FC_RGBA_VBGR:
-        i->load_flags |= FT_LOAD_TARGET_LCD_V;
         break;
       }
     }
-  } else { i->load_flags |= FT_LOAD_TARGET_MONO; }
+  } else { i->load_flags |= FT_LOAD_TARGET_MONO; fprintf(stdout, "Add Target Mono\n");}
 
-  if (!hinting || hstyle == FC_HINT_NONE) { i->load_flags |= FT_LOAD_NO_HINTING; }
-  if                                 (vl) { i->load_flags |= FT_LOAD_VERTICAL_LAYOUT; }
-  if                              (ahint) { i->load_flags |= FT_LOAD_FORCE_AUTOHINT; }
-  if                              (!gadv) { i->load_flags |= FT_LOAD_IGNORE_GLOBAL_ADVANCE_WIDTH; }
-  if                       (i->cwidth) { i->spacing = FC_MONO; }
+  if (!hinting || hstyle == FC_HINT_NONE) { i->load_flags |= FT_LOAD_NO_HINTING; fprintf(stdout, "Add No Hinting\n"); }
+  if                                 (vl) { i->load_flags |= FT_LOAD_VERTICAL_LAYOUT; fprintf(stdout, "Add VLayout\n"); }
+  if                              (ahint) { i->load_flags |= FT_LOAD_FORCE_AUTOHINT; fprintf(stdout, "Add Force Autohint\n"); }
+  if                              (!gadv) { i->load_flags |= FT_LOAD_IGNORE_GLOBAL_ADVANCE_WIDTH; fprintf(stdout, "Add Ign Glob Adv\n"); }
+  if                          (i->cwidth) { i->spacing = FC_MONO; }
+
+  fprintf(stdout, "Load flags: %x ->\n\tNoScale: %u\n\tNoHinting: %u\n\tRender: %u\n\tNoBitmap: %u\n\tVLayout: %u\n\tForceAutohint: %u\n\tCropBitmap: %u\n\tPedantic: %u\n\tIgnoreGlobalAdvanceWidth: %u\n\tNoRecuse: %u\n\tIgnoreTransform: %u\n\tMonochrome: %u\n\tLinearDesign: %u\n\tSbitsOnly: %u\n\tNoAutohint: %u\n\tLoadNormal: %u\n\tLoadLight: %u\n\tLoadMono: %u\n\tLoadLCD: %u\n\tLoadLCDV: %u\n\tColor: %u\n\t\n", i->load_flags,
+((i->load_flags & FT_LOAD_NO_SCALE) > 0),
+((i->load_flags & FT_LOAD_NO_HINTING) > 0),
+((i->load_flags & FT_LOAD_RENDER) > 0),
+((i->load_flags & FT_LOAD_NO_BITMAP) > 0),
+((i->load_flags & FT_LOAD_VERTICAL_LAYOUT) > 0),
+((i->load_flags & FT_LOAD_FORCE_AUTOHINT) > 0),
+((i->load_flags & FT_LOAD_CROP_BITMAP) > 0),
+((i->load_flags & FT_LOAD_PEDANTIC) > 0),
+((i->load_flags & FT_LOAD_IGNORE_GLOBAL_ADVANCE_WIDTH) > 0),
+((i->load_flags & FT_LOAD_NO_RECURSE) > 0),
+((i->load_flags & FT_LOAD_IGNORE_TRANSFORM) > 0),
+((i->load_flags & FT_LOAD_MONOCHROME) > 0),
+((i->load_flags & FT_LOAD_LINEAR_DESIGN) > 0),
+((i->load_flags & FT_LOAD_SBITS_ONLY) > 0),
+((i->load_flags & FT_LOAD_NO_AUTOHINT) > 0),
+((i->load_flags & FT_LOAD_TARGET_NORMAL) > 0),
+((i->load_flags & FT_LOAD_TARGET_LIGHT) > 0),
+((i->load_flags & FT_LOAD_TARGET_MONO) > 0),
+((i->load_flags & FT_LOAD_TARGET_LCD) > 0),
+((i->load_flags & FT_LOAD_TARGET_LCD_V) > 0),
+((i->load_flags & FT_LOAD_COLOR) > 0));
 
   return 0;
 fi_crash:
@@ -425,7 +494,7 @@ void find_font_face(const char *fname, FT_Face *face, struct fontInfo *i) {
   FcConfigDestroy(config);
   FcFini();
 
-  //print_font_info(i);
+  print_font_info(i);
   FTCHECK(FT_New_Face(fts.l, i->fname, 0, face),"Could not create a font face from the given pattern!");
   FTCHECK(FT_Set_Char_Size(*face, 0, 16 * 64, 300, 300),"Could not set the character size!");
   FTCHECK(FT_Set_Pixel_Sizes(*face, i->xsize >> 6, i->ysize >> 6),"Could not set the pixel size!");
@@ -514,7 +583,7 @@ void breakup(wchar_t *__restrict s, uint32_t sl) {
       sep = s[i];
       a[ca] = L'\0';
 
-      cl = draw_string(&state.mon, a, 0, 0, 0, 0, 0, NULL);
+      cl = draw_string(&state.mon, a, 0, 0, 0, 0, 0);
       //fprintf(stdout, "Added new word %u[%ls] len %u/%u\n", ca, a, cl, maxl);
       if (cl > maxl) {
         if (ca == 1) {
@@ -525,7 +594,7 @@ void breakup(wchar_t *__restrict s, uint32_t sl) {
           j = 1;
           sep = a[j];
           a[j] = L'\0';
-          while (draw_string(&state.mon, a, 0, 0, 0, 0, 0, NULL) < maxl) {
+          while (draw_string(&state.mon, a, 0, 0, 0, 0, 0) < maxl) {
             a[j] = sep;
             ++j;
             sep = a[j];
@@ -590,7 +659,7 @@ int main(int argc, char *argv[]) {
     uint32_t ct = 0;
     for(i = 1; i < argc; ++i) {
       ct = utf2wwch(argv[i], txt);
-      txt[ct] = L' ';
+      txt[ct] = L'\0';
       breakup(txt, ct);
     }
   }
@@ -609,7 +678,7 @@ int main(int argc, char *argv[]) {
   state.mon.lsurf = zwlr_layer_shell_v1_get_layer_surface(state.zwlr, state.mon.surf, state.mon.out, ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY, "Plant"); WLCHECK(state.mon.lsurf,"Cannot create zwlr surface!");
   zwlr_layer_surface_v1_add_listener(state.mon.lsurf, &zwlr_listener, &state.mon);
   zwlr_layer_surface_v1_set_anchor(state.mon.lsurf, ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT | ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP);
-  zwlr_layer_surface_v1_set_margin(state.mon.lsurf, topm, 0, 0, 0);
+  zwlr_layer_surface_v1_set_margin(state.mon.lsurf, posy, posx, 0, 0);
 
   zwlr_layer_surface_v1_set_size(state.mon.lsurf, barWidth, barHeight);
   zwlr_layer_surface_v1_set_keyboard_interactivity(state.mon.lsurf, ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_NONE);

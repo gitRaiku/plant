@@ -1,7 +1,5 @@
 # Plant
-A simple daemonless wayland notification utility 
-
-TODO: Add Image
+A simple daemonless wayland notification utility with support for font gamma correction.
 
 # Configuration
 Like all suckless software all configuration is done by editing the `src/config.h` file
@@ -14,9 +12,10 @@ sudo make install
 should build it and copy it to `/usr/local/bin`
 
 # Usage
-Just run
 ```
-plant <line 1> <line 2> ...
+Usage: plant [--debug] [--] <first line to display> [line2] [line3] ...
+    --debug: Enables debug logging (mostly font rendering information)
+    --: Enables literal parsing of every argument after it
 ```
 To display the notification
 

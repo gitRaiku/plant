@@ -59,7 +59,7 @@ build: $(BIN_DIR) $(PROT_OBJ_NAMES) $(BIN_DIR)/$(TARGET)
 install: build
 	cp $(BIN_DIR)/$(TARGET) /usr/local/bin/$(TARGET)
 
-T := "Tefgstww 1231" "日本酒はめっちゃ甘い"
+T := "I LOVE PLANT!!!!!" "UTF-8もサッポトである！"
 
 run: build
 	./$(BIN_DIR)/$(TARGET) $T

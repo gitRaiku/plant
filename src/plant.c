@@ -3,6 +3,8 @@
 VECTOR_SUITE(seat, struct cseat)
 VECTOR_SUITE(wch, wchar_t *)
 
+uint32_t log_level = 0;
+
 struct fontInfo {
   char *fname;
   FT_F26Dot6 xsize, ysize;  /* pixel size */
@@ -222,7 +224,6 @@ void draw_char(struct cmon *mon, int32_t x, int32_t y, uint8_t cs, uint64_t fc, 
   if (CB.pixel_mode == FT_PIXEL_MODE_LCD) {
     cw /= 3;
   }
-  //fprintf(stdout, "%u %u %u %u\n", CB.width, CB.pitch, CB.pixel_mode, cw);
   for (i = 0; i < CB.rows; ++i) {
     if ((i + y) < 0 || mon->sb.height <= (i + y)) {
       continue;
@@ -273,18 +274,10 @@ int32_t draw_string(struct cmon *mon, const wchar_t *__restrict s, uint32_t x, u
     FTCHECK(FT_Load_Glyph(fts.face[cs], cg, fts.i[cs].load_flags), "Could not load a glyph!");
 
     FTCHECK(FT_Render_Glyph(CG, FT_RENDER_MODE_LCD), "Could not render a glyph!");
-    //FTCHECK(FT_Render_Glyph(CG, FT_RENDER_MODE_LIGHT), "Could not render a glyph!");
-
-    /*if (fts.i[cs].lcd_filter && LCD) {
-      FTCHECK(FT_Render_Glyph(CG, FT_RENDER_MODE_LCD), "Could not render a glyph!");
-    } else {
-      FTCHECK(FT_Render_Glyph(CG, FT_RENDER_MODE_LIGHT), "Could not render a glyph!");
-    }*/
 
     if (render) {
       int32_t xoff =   CM.horiBearingX >> 6;
       int32_t yoff = -(CM.horiBearingY >> 6);
-      //fprintf(stdout, "Drawing %lc with %u\n", s[i], fts.i[cs].lcd_filter);
       draw_char(mon, x + px + xoff, y + yoff, cs, fc, bc);
     }
 
@@ -309,8 +302,6 @@ int32_t __inline__ __attribute((pure)) max(int32_t o1, int32_t o2) {
 void render(struct cmon *mon, wchar_t *__restrict *__restrict lines, uint32_t lc) {
   if (!mon->sb.b && lc) { return; }
 
-  //fprintf(stdout, "T: %u\n", lc);
-
   draw_rect(mon, 0, 0, barWidth    , barHeight    ,     border_col); /// Very efficient, i know
   draw_rect(mon, borderThickness, borderThickness, barWidth - borderThickness * 2, barHeight - borderThickness * 2, background_col);
   
@@ -325,7 +316,6 @@ void render(struct cmon *mon, wchar_t *__restrict *__restrict lines, uint32_t lc
       py = 0;
       py = (fts.face[0]->height >> 6) + linepad;
       vt += py;
-      //fprintf(stdout, "%ls -> %u\n", lines[i], vt);
     }
   }
 
@@ -431,26 +421,26 @@ uint8_t get_font_info(FcPattern *pattern, struct fontInfo *__restrict i) {
 
   if (i->aa) {
     if ((FC_HINT_NONE < hstyle && hstyle < FC_HINT_FULL) && !i->lcd_filter) {
-      fprintf(stdout, "Add Target Light\n");
+      LOG(0, "Add Hinting Target Light\n");
       i->load_flags |= FT_LOAD_TARGET_LIGHT;
     } else {
       switch (i->rgba) {
       case FC_RGBA_RGB:
       case FC_RGBA_BGR:
-        fprintf(stdout, "Add Target LCD\n");
+        LOG(0, "Add Hinting Target LCD\n");
         i->load_flags |= FT_LOAD_TARGET_LCD;
         break;
       }
     }
-  } else { i->load_flags |= FT_LOAD_TARGET_MONO; fprintf(stdout, "Add Target Mono\n");}
+  } else { i->load_flags |= FT_LOAD_TARGET_MONO; LOG(0, "Add Hinting Target Mono\n");}
 
-  if (!hinting || hstyle == FC_HINT_NONE) { i->load_flags |= FT_LOAD_NO_HINTING; fprintf(stdout, "Add No Hinting\n"); }
-  if                                 (vl) { i->load_flags |= FT_LOAD_VERTICAL_LAYOUT; fprintf(stdout, "Add VLayout\n"); }
-  if                              (ahint) { i->load_flags |= FT_LOAD_FORCE_AUTOHINT; fprintf(stdout, "Add Force Autohint\n"); }
-  if                              (!gadv) { i->load_flags |= FT_LOAD_IGNORE_GLOBAL_ADVANCE_WIDTH; fprintf(stdout, "Add Ign Glob Adv\n"); }
+  if (!hinting || hstyle == FC_HINT_NONE) { i->load_flags |= FT_LOAD_NO_HINTING; LOG(0, "Add No Hinting\n"); }
+  if                                 (vl) { i->load_flags |= FT_LOAD_VERTICAL_LAYOUT; LOG(0, "Add Hinting VLayout\n"); }
+  if                              (ahint) { i->load_flags |= FT_LOAD_FORCE_AUTOHINT; LOG(0, "Add Force Autohint\n"); }
+  if                              (!gadv) { i->load_flags |= FT_LOAD_IGNORE_GLOBAL_ADVANCE_WIDTH; LOG(0, "Add Ignore Global Advance Width\n"); }
   if                          (i->cwidth) { i->spacing = FC_MONO; }
 
-  fprintf(stdout, "Load flags: %x ->\n\tNoScale: %u\n\tNoHinting: %u\n\tRender: %u\n\tNoBitmap: %u\n\tVLayout: %u\n\tForceAutohint: %u\n\tCropBitmap: %u\n\tPedantic: %u\n\tIgnoreGlobalAdvanceWidth: %u\n\tNoRecuse: %u\n\tIgnoreTransform: %u\n\tMonochrome: %u\n\tLinearDesign: %u\n\tSbitsOnly: %u\n\tNoAutohint: %u\n\tLoadNormal: %u\n\tLoadLight: %u\n\tLoadMono: %u\n\tLoadLCD: %u\n\tLoadLCDV: %u\n\tColor: %u\n\t\n", i->load_flags,
+  LOG(0, "Load flags: %x ->\n\tNoScale: %u\n\tNoHinting: %u\n\tRender: %u\n\tNoBitmap: %u\n\tVLayout: %u\n\tForceAutohint: %u\n\tCropBitmap: %u\n\tPedantic: %u\n\tIgnoreGlobalAdvanceWidth: %u\n\tNoRecuse: %u\n\tIgnoreTransform: %u\n\tMonochrome: %u\n\tLinearDesign: %u\n\tSbitsOnly: %u\n\tNoAutohint: %u\n\tLoadNormal: %u\n\tLoadLight: %u\n\tLoadMono: %u\n\tLoadLCD: %u\n\tLoadLCDV: %u\n\tColor: %u\n\t\n", i->load_flags,
 ((i->load_flags & FT_LOAD_NO_SCALE) > 0),
 ((i->load_flags & FT_LOAD_NO_HINTING) > 0),
 ((i->load_flags & FT_LOAD_RENDER) > 0),
@@ -478,7 +468,7 @@ fi_crash:
   return 1;
 }
 
-void print_font_info(struct fontInfo *__restrict i) { fprintf(stdout, "Got font: %s\n\tPsize: %lix%li\n\tAntialias: %u\n\tEmbold: %u\n\tColor: %u\n\tRgba: %u\n\tLcdFilter: %u\n\tHinting: %u\n\tLoadFlags: 0x%x\n\tSpacing: %x\n\tMinspace: %x\n\tChar Width: %x\n", i->fname, i->xsize, i->ysize, i->aa, i->embold, i->color, i->rgba, i->lcd_filter, i->hinting, i->load_flags, i->spacing, i->minspace, i->cwidth); }
+void print_font_info(struct fontInfo *__restrict i) { LOG(0, "Got font: %s\n\tPsize: %lix%li\n\tAntialias: %u\n\tEmbold: %u\n\tColor: %u\n\tRgba: %u\n\tLcdFilter: %u\n\tHinting: %u\n\tLoadFlags: 0x%x\n\tSpacing: %x\n\tMinspace: %x\n\tChar Width: %x\n", i->fname, i->xsize, i->ysize, i->aa, i->embold, i->color, i->rgba, i->lcd_filter, i->hinting, i->load_flags, i->spacing, i->minspace, i->cwidth); }
 
 void find_font_face(const char *fname, FT_Face *face, struct fontInfo *i) {
   FcInit(); /// Boy do i love fontconfig and all their incredible documentation
@@ -563,7 +553,6 @@ void ts(double t) {
 }
 
 void breakup(wchar_t *__restrict s, uint32_t sl) {
-  //fprintf(stdout, "Got to break up %ls\n", s);
   int32_t maxl = barWidth - borderThickness * 2 - hpad * 2;
   {
     int32_t i, j;
@@ -584,10 +573,8 @@ void breakup(wchar_t *__restrict s, uint32_t sl) {
       a[ca] = L'\0';
 
       cl = draw_string(&state.mon, a, 0, 0, 0, 0, 0);
-      //fprintf(stdout, "Added new word %u[%ls] len %u/%u\n", ca, a, cl, maxl);
       if (cl > maxl) {
         if (ca == 1) {
-          //fprintf(stdout, "Character 2 big %lc i ain't botherin'", a[0]);
           continue;
         }
         if (cs == 0) {
@@ -606,7 +593,6 @@ void breakup(wchar_t *__restrict s, uint32_t sl) {
           p[j] = L'\0';
           wchvp(&lins, p);
 
-          //fprintf(stdout, "Mid-splitting at %u got [%ls]\n", j, p);
           i = cas + j;
           cas = i;
           cs = 0;
@@ -616,8 +602,6 @@ void breakup(wchar_t *__restrict s, uint32_t sl) {
           wcsncpy(p, a, cs);
           p[cs] = L'\0';
           wchvp(&lins, p);
-
-          //fprintf(stdout, "Splitting at word boundary %u got [%ls]\n", ca, p);
 
           i = cas;
           cs = 0;
@@ -635,17 +619,31 @@ void breakup(wchar_t *__restrict s, uint32_t sl) {
       wcsncpy(p, a, ca);
       p[ca] = L'\0';
       wchvp(&lins, p);
-      //fprintf(stdout, "No more splitting %u got [%ls]\n", ca, p);
     }
   }
 }
 
+void usage() {
+  fputs("Usage: plant [--debug] [--] <first line to display> [line2] [line3] ...\n", stderr);
+  fputs("    --debug: Enables debug logging (mostly font rendering information)\n", stderr);
+  fputs("    --: Enables literal parsing of every argument after it\n", stderr);
+  exit(1);
+}
+
 int main(int argc, char *argv[]) {
   setlocale(LC_ALL, "");
-  if (argc < 2) {
-    fputs("Usage:\n\tplant <text to display>\n", stderr);
-    return 1;
+  log_level = 2;
+  if (argc < 2) { usage(); }
+
+  uint32_t sarg = 1;
+  if (!strcmp(argv[1], "--debug")) { /// This is dumb but i don't wanna make it more complex for only 2 possible flags))
+    sarg = 2;
+    if (argc < 3) { usage(); }
+    if (!strcmp(argv[2], "--")) { sarg = 3; if (argc < 4) { usage(); } }
+    log_level = 0;
   }
+
+  if (!strcmp(argv[1], "--")) { sarg = 2; if (argc < 3) { usage(); } }
 
   memset(&state, 0, sizeof(state));
   init_rand();
@@ -657,7 +655,7 @@ int main(int argc, char *argv[]) {
     wchar_t txt[1024];
     int32_t i;
     uint32_t ct = 0;
-    for(i = 1; i < argc; ++i) {
+    for(i = sarg; i < argc; ++i) {
       ct = utf2wwch(argv[i], txt);
       txt[ct] = L'\0';
       breakup(txt, ct);

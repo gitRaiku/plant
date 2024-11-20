@@ -31,6 +31,8 @@
 #include "config.h"
 #include "vecs.h"
 
+#define LOG(_level, ...) {if(log_level <= _level) {fprintf(stdout, "Plant: " __VA_ARGS__);}}
+
 #define COMPV 4
 #define SHMV 1
 #define ZWLRV 4

@@ -2,3 +2,4 @@
 .obj/
 protocol/*.c
 protocol/*.h
+bin/*

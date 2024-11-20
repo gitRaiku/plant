@@ -17,8 +17,10 @@ static const uint32_t posx = 30; // Distance from the right of the screen in px
 static const uint32_t posy = 60; // Distance from the top of the screen in px
 
 static const uint64_t background_col = 0xFF3E3E3E; /// AARRGGBB
-static const uint64_t foreground_col = 0xFFECECEC;
-static const uint64_t     border_col = 0xFFECECEC;
+static const uint64_t foreground_col = 0xFFECECEC; /// Transparency is supported but wayland has
+static const uint64_t     border_col = 0xFFECECEC; /// This problem where if #00FFFFFF is not 
+                                                   /// Fully transparent, so you cannot get true
+                                                   /// Transparency.
 
 static const char *fonts[2] = { "JetBrainsMono:size=20:style=Normal", // Written using fontconfig selectors
                                 "Koruri:size=19" };      // Max 2 fonts, Leave NULL if you 

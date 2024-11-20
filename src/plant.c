@@ -172,44 +172,51 @@ void cbufs(struct cmon *mon, uint32_t width, uint32_t height, enum wl_shm_format
 
 double __inline__ lerp(double t, double o1, double o2) { return (o1 * (1.0 - t)) + (o2 * t); }
 
-uint64_t ablend(uint64_t fc, uint64_t bc) {
-#define CTG(a,b,c,d) {b=(double)((a&0xFF0000)>>16)/255.0;c=(double)((a&0x00FF00)>>8)/255.0;d=(double)((a&0x0000FF)>>0)/255.0;}
-  double a1, a2, r1, r2, g1, g2, b1, b2;
-  CTG(fc, r1, g1, b1);
-  CTG(bc, r2, g2, b2);
-  uint8_t r3, g3, b3;
-
-  a1 = (0.2126*r1 + 0.7152*g1 + 0.0722*b1);
-  a2 = 1.0;
-
-  double a3 = a1 + a2 * (1 - a1);
-
-  double a1p = a1            / a3;
-  double a2p = a2 * (1 - a1) / a3;
-  r3 = (r1 * a1p + r2 * a2p) * 255.0;
-  g3 = (g1 * a1p + g2 * a2p) * 255.0;
-  b3 = (b1 * a1p + b2 * a2p) * 255.0;
-
-  a3 = 255;
-
-  return ((uint64_t)a3 << 24) |
-         ((uint64_t)r3 << 16) |
-         ((uint64_t)g3 <<  8) |
-         ((uint64_t)b3 <<  0);
+uint64_t gcor(uint64_t c, double gc) {
+#define CTG(a,x,b,c,d) {x=(double)((a&0xFF000000)>>24)/255.0;b=(double)((a&0xFF0000)>>16)/255.0;c=(double)((a&0x00FF00)>>8)/255.0;d=(double)((a&0x0000FF)>>0)/255.0;}
+  double a, r, g, b;
+  CTG(c, a, r, g, b);
+  r = pow(r, gc) * 255.0;
+  g = pow(g, gc) * 255.0;
+  b = pow(b, gc) * 255.0;
+  return ((uint64_t)a << 24) |
+         ((uint64_t)r << 16) |
+         ((uint64_t)g <<  8) |
+         ((uint64_t)b <<  0);
 #undef CTG
 }
 
-uint64_t cmul(uint64_t c1, uint64_t c2) {
-#define CTG(a,x,b,c,d) {x=(double)((a&0xFF000000)>>24)/255.0;b=(double)((a&0xFF0000)>>16)/255.0;c=(double)((a&0x00FF00)>>8)/255.0;d=(double)((a&0x0000FF)>>0)/255.0;}
-  double a1, a2, r1, r2, g1, g2, b1, b2;
-  CTG(c1, a1, r1, g1, b1);
-  CTG(c2, a2, r2, g2, b2);
-  uint8_t a3, r3, g3, b3;
-  a3 = (a1 * a2) * 255.0;
-  r3 = pow(r1 * r2, gammaCorrection) * 255.0;
-  g3 = pow(g1 * g2, gammaCorrection) * 255.0;
-  b3 = pow(b1 * b2, gammaCorrection) * 255.0;
-  return ((uint64_t)a3 << 24) | ((uint64_t)r3 << 16) | ((uint64_t)g3 << 8) | ((uint64_t)b3 << 0);
+uint64_t ablend(uint64_t co, uint64_t fc, uint64_t bc, double gamma) { /// Why has god forsaken me
+#define CTG(a,b,c,d) {b=(double)((a&0xFF0000)>>16)/255.0;c=(double)((a&0x00FF00)>>8)/255.0;d=(double)((a&0x0000FF)>>0)/255.0;}
+
+  uint64_t ac = gcor(co, 1 / gamma);
+  //uint64_t ac = co;
+  uint64_t af = fc;
+  uint64_t ab = bc;
+
+  double r1, r2, r3, r4;
+  double g1, g2, g3, g4;
+  double b1, b2, b3, b4;
+  CTG(ac, r1, g1, b1)
+  CTG(af, r2, g2, b2)
+  CTG(ab, r3, g3, b3)
+
+	r4 = r1 * r2 + (1.0 - r1) * r3;
+	g4 = g1 * g2 + (1.0 - g1) * g3;
+	b4 = b1 * b2 + (1.0 - b1) * b3;
+
+  uint64_t bt;
+  if (co == 0xFFFFFFFF) {
+    bt = (fc >> 24) << 24;
+  } else {
+    bt = (bc >> 24) << 24;
+  }
+  uint64_t res =  bt |
+                  ((uint64_t)(r4 * 255.0) << 16) |
+                  ((uint64_t)(g4 * 255.0) <<  8) |
+                  ((uint64_t)(b4 * 255.0) <<  0);
+  //res = gcor(res, 1 / gamma);
+  return res;
 #undef CTG
 }
 
@@ -237,7 +244,7 @@ void draw_char(struct cmon *mon, int32_t x, int32_t y, uint8_t cs, uint64_t fc, 
       } else {
         col = 0xFF000000 | ((uint64_t)CB.buffer[i * CB.pitch + j] << 16) | ((uint64_t)CB.buffer[i * CB.pitch + j] << 8) | ((uint64_t)CB.buffer[i * CB.pitch + j]);
       }
-      G(mon->sb.data, i + y, j + x, mon->sb.width) = ablend(cmul(col, fc), bc);
+      G(mon->sb.data, i + y, j + x, mon->sb.width) = ablend(col, fc, bc, gammaCorrection);
       //G(mon->sb.data, i + y, j + x, mon->sb.width) = ablend(0xFFFFFFFF, 0xFFFF0000);
     }
   }

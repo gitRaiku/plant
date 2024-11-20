@@ -13,6 +13,8 @@ sudo make install
 ```
 should build it and copy it to `/usr/local/bin`
 
+This package is also available as an AUR package `https://aur.archlinux.org/packages/wl-plant`.
+
 # Usage
 ```
 Usage: plant [--debug] [--] <first line to display> [line2] [line3] ...

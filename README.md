@@ -1,7 +1,7 @@
 # Plant
 A simple daemonless wayland notification utility with support for font gamma correction.
 
-![Plant](https://github.com/gitRaiku/plant/blob/master/Plant.mp4?raw=true)
+![Plant](https://github.com/gitRaiku/plant/blob/master/Plant.gif?raw=true)
 
 # Configuration
 Like all suckless software all configuration is done by editing the `src/config.h` file

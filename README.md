@@ -24,7 +24,8 @@ Usage: plant [--debug] [--] <first line to display> [line2] [line3] ...
 To display the notification
 
 # Improvements
-Need make it die after cliking on it
+~~Need make it die after cliking on it~~ \
+Could use a queue for all notifications
 
 # Inspirations
 This project was inspired by [herbe](https://freetype.org/freetype2/docs/tutorial/step2.html) which was made by a based guy. This is supposed to be the same thing but for Wayland.

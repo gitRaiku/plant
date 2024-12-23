@@ -1,4 +1,6 @@
 #include "plant.h"
+#include <stdint.h>
+#include <pthread.h>
 
 VECTOR_SUITE(seat, struct cseat)
 VECTOR_SUITE(wch, wchar_t *)
@@ -53,7 +55,6 @@ struct cstate {
   uint32_t tlen[9]; // Length in px of every tag icon
 };
 struct cstate state = {0};
-uint8_t SHOULD_CLOSE = 0;
 uint32_t barHeight = 10;
 struct wchv lins;
 
@@ -64,7 +65,9 @@ void zxout_logical_size(void *d, struct zxdg_output_v1 *z, int x, int y) { }
 void zxout_done(void *d, struct zxdg_output_v1 *z) { }
 void zxout_description(void *d, struct zxdg_output_v1 *z, const char *c) { }
 void seat_name(void *d, struct wl_seat *s, const char *n) { }
-void p_enter(void *data, struct wl_pointer *ptr, uint32_t serial, struct wl_surface *surface, wl_fixed_t x, wl_fixed_t y) {}
+void p_enter(void *data, struct wl_pointer *ptr, uint32_t serial, struct wl_surface *surface, wl_fixed_t x, wl_fixed_t y) {
+	state.closed = (1 && !clickToClose);
+}
 void p_leave(void *data, struct wl_pointer *ptr, uint32_t serial, struct wl_surface *surf) {}
 void p_motion(void *data, struct wl_pointer *ptr, uint32_t time, wl_fixed_t x, wl_fixed_t y) {}
 void p_axis(void *d, struct wl_pointer *p, uint32_t t, uint32_t a, wl_fixed_t v) { }
@@ -88,7 +91,7 @@ void p_button(void *data, struct wl_pointer *ptr, uint32_t serial, uint32_t time
 void p_frame(void *data, struct wl_pointer *ptr) {
   struct cseat *seat = data;
   if (seat->p.cpres) {
-    SHOULD_CLOSE = 1;
+		state.closed = clickToClose;
   }
 }
 
@@ -97,6 +100,7 @@ const struct wl_pointer_listener pointer_listener = { .enter = p_enter, .leave =
 void seat_caps(void *data, struct wl_seat *s, uint32_t caps) {
   struct cseat *seat = data;
   uint8_t hasPointer = caps & WL_SEAT_CAPABILITY_POINTER;
+
   if (!seat->p.p && hasPointer) {
     seat->p.p = wl_seat_get_pointer(seat->s);
     wl_pointer_add_listener(seat->p.p, &pointer_listener, seat);
@@ -344,7 +348,7 @@ void zwlr_configure(void *data, struct zwlr_layer_surface_v1 *l, uint32_t serial
   if (mon->sb.b && width == mon->sb.width && height == mon->sb.height) { return; }
   cbufs(mon, width, height, WL_SHM_FORMAT_ARGB8888);
 }
-void zwlr_closed(void *data, struct zwlr_layer_surface_v1 *l) { }
+void zwlr_closed(void *data, struct zwlr_layer_surface_v1 *l) {}
 struct zwlr_layer_surface_v1_listener zwlr_listener = { .configure = zwlr_configure, .closed = zwlr_closed };
 
 void finish_init() {
@@ -637,6 +641,12 @@ void usage() {
   exit(1);
 }
 
+void* timeout_thread(){
+	ts(timeout);
+	state.closed = 1;
+	exit(0);
+}
+
 int main(int argc, char *argv[]) {
   setlocale(LC_ALL, "");
   log_level = 2;
@@ -679,11 +689,13 @@ int main(int argc, char *argv[]) {
   wl_display_roundtrip(state.dpy);
   finish_init();
 
+
   state.mon.surf = wl_compositor_create_surface(state.comp); WLCHECK(state.mon.surf,"Cannot create wayland surface!");
   state.mon.lsurf = zwlr_layer_shell_v1_get_layer_surface(state.zwlr, state.mon.surf, state.mon.out, ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY, "Plant"); WLCHECK(state.mon.lsurf,"Cannot create zwlr surface!");
   zwlr_layer_surface_v1_add_listener(state.mon.lsurf, &zwlr_listener, &state.mon);
   zwlr_layer_surface_v1_set_anchor(state.mon.lsurf, ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT | ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP);
   zwlr_layer_surface_v1_set_margin(state.mon.lsurf, posy, posx, 0, 0);
+
 
   zwlr_layer_surface_v1_set_size(state.mon.lsurf, barWidth, barHeight);
   zwlr_layer_surface_v1_set_keyboard_interactivity(state.mon.lsurf, ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_NONE);
@@ -691,8 +703,17 @@ int main(int argc, char *argv[]) {
   wl_display_dispatch(state.dpy);
 
   render(&state.mon, lins.v, lins.l);
-  wl_display_dispatch(state.dpy);
-  ts(timeout);
+
+	// start thread for timeout checking	
+	
+	pthread_t timeout_thread_id;
+
+	pthread_create(&timeout_thread_id, NULL, timeout_thread, NULL);
+	pthread_detach(timeout_thread_id);
+
+	while(!state.closed){wl_display_dispatch(state.dpy);}	
+
+	//TODO: might wanna have a larger click area for notifs 
 
   return 0;
 }

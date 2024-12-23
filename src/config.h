@@ -1,8 +1,13 @@
 #include <stdint.h>
+#include <stdbool.h>
 
-static const double timeout = 2.2;
+static const double timeout = 8.2;
 
 static const uint32_t barWidth  = 500;
+
+static const bool clickToClose = true;
+
+
 
 static const uint32_t borderThickness = 2; // px
 static const uint32_t hpad = 10; // Horizontal padding in px from the border

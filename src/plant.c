@@ -1,6 +1,4 @@
 #include "plant.h"
-#include <stdint.h>
-#include <pthread.h>
 
 VECTOR_SUITE(seat, struct cseat)
 VECTOR_SUITE(wch, wchar_t *)
@@ -647,6 +645,12 @@ void* timeout_thread(){
 	exit(0);
 }
 
+uint64_t getcurtu() {
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
+  return ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
+
 int main(int argc, char *argv[]) {
   setlocale(LC_ALL, "");
   log_level = 2;
@@ -704,14 +708,21 @@ int main(int argc, char *argv[]) {
 
   render(&state.mon, lins.v, lins.l);
 
-	// start thread for timeout checking	
-	
-	pthread_t timeout_thread_id;
+  uint64_t stu = getcurtu();
 
-	pthread_create(&timeout_thread_id, NULL, timeout_thread, NULL);
-	pthread_detach(timeout_thread_id);
-
-	while(!state.closed){wl_display_dispatch(state.dpy);}	
+  int32_t dpyfd = wl_display_get_fd(state.dpy); WLCHECK(dpyfd,"Could not get the display fd!");
+  struct pollfd pfds[] = { {.fd = dpyfd, .events = POLLIN } };
+  int32_t pr;
+  wl_display_dispatch(state.dpy);
+	while(!state.closed) {
+    pr = poll(pfds, 1, 10);
+    if ((double)(getcurtu() - stu) / 1000.0 > timeout) { state.closed = true; }
+    if (pr < 0 && errno != EINTR) {
+      LOG(0, "Could not poll for the file descriptors! %m\n") ;
+    } else if (pr > 0) {
+      wl_display_dispatch(state.dpy);
+    }
+  }
 
 	//TODO: might wanna have a larger click area for notifs 
 

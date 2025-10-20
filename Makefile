@@ -17,7 +17,11 @@ C_OBJ := $(C_SRC:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
 EX_HEADERS := $(SRC_DIR)/config.h $(SRC_DIR)/vecs.h
 
 DATE          := $(shell date "+%Y-%m-%d")
-COMPILE_FLAGS := -ggdb3 -Og -Wall -march=native -mtune=native -fmodulo-sched \
+
+	
+# COMPILE_FLAGS := -ggdb3 -Og -Wall -march=native -mtune=native -fmodulo-sched  \
+
+COMPILE_FLAGS := -ggdb3 -Og -Wall -march=x86-64 -mtune=x86-64 -fmodulo-sched \
 					       -fstack-clash-protection -pthread -pipe \
 					       -fkeep-inline-functions -D_FORTIFY_SOURCE=2 -D_GNU_SOURCE \
 								 -I/usr/include/freetype2 -I/usr/include/libpng16 -I/usr/include/harfbuzz \
@@ -25,7 +29,8 @@ COMPILE_FLAGS := -ggdb3 -Og -Wall -march=native -mtune=native -fmodulo-sched \
 
 INCLUDE_FLAGS  := 
 LIBRARY_FLAGS  := -lwayland-client -lwayland-cursor -lfreetype -lfontconfig -lm
-LD_FLAGS       := -O2
+# LD_FLAGS       := -O2
+LD_FLAGS       := 
 
 xdgsh_XML      := $(PRT_DIR)/xml/xdg-shell.xml 
 xout_XML       := $(PRT_DIR)/xml/xdg-output.xml

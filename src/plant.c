@@ -357,7 +357,7 @@ void finish_init() {
   CHECK_INIT(xoutmgr   , zxdg_output_manager_v1, XOUTMGRV);
 #undef CHECK_INIT
 
-  seatvt(&state.seats);
+  // seatvt(&state.seats);
   state.mon.xout = zxdg_output_manager_v1_get_xdg_output(state.xoutmgr, state.mon.out);
   zxdg_output_v1_add_listener(state.mon.xout, &zxout_listener, &state.mon.out);
   wl_display_roundtrip(state.dpy);
@@ -395,7 +395,7 @@ uint8_t get_font_info(FcPattern *pattern, struct fontInfo *__restrict i) {
 #define QI(v,p,d) {switch (FcPatternGetInteger(pattern, p, 0, &v)) { case FcResultNoMatch: v = d; break; case FcResultMatch: break; default: goto fi_crash; }}
   char *cf;
   WLCHECK(FcPatternGetString(pattern, FC_FILE, 0, (FcChar8 **)&cf)==FcResultMatch,"Could not find a suitable font!");
-  i->fname = malloc(strlen(cf));
+  i->fname = malloc(strlen(cf) + 5);
   strcpy(i->fname, cf);
   
   double psize;
@@ -573,7 +573,7 @@ void breakup(wchar_t *__restrict s, uint32_t sl) {
     wchar_t  sep = 0; // Cur separator
     wchar_t *__restrict p;
     for(i = 0; i < sl; ++i) {
-      while (s[i] != L' ' && s[i] != L'　' && s[i] != L'\n') {
+      while ((s[i] != L' ') && (s[i] != L'　') && (s[i] != L'\n') && (i < sl)) {
         a[ca] = s[i];
         ++i;
         ++ca;
@@ -624,7 +624,7 @@ void breakup(wchar_t *__restrict s, uint32_t sl) {
       }
     }
     if (ca) {
-      p = malloc(ca * sizeof(p[0]) + 1);
+      p = malloc((ca + 5) * sizeof(p[0]));
       wcsncpy(p, a, ca);
       p[ca] = L'\0';
       wchvp(&lins, p);
@@ -673,7 +673,7 @@ int main(int argc, char *argv[]) {
   //wchar_t *__restrict *__restrict t;
   wchvi(&lins);
   {
-    wchar_t txt[1024];
+    wchar_t txt[1024] = {0};
     int32_t i;
     uint32_t ct = 0;
     for(i = sarg; i < argc; ++i) {

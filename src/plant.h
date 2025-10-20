@@ -35,7 +35,7 @@
 
 #define COMPV 4
 #define SHMV 1
-#define ZWLRV 4
+#define ZWLRV 3
 #define XWMBASEV 2
 #define XOUTMGRV 3
 #define SEATV 7

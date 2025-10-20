@@ -28,7 +28,7 @@ void name ##vi(vect v) {                             \
 void name ##vt(vect v) {                             \
   if (v->s != v->l) {                                \
     v->s = v->l;                                     \
-    v->v = realloc(v->v, sizeof(v->v[0]) * v->s);    \
+    v->v = realloc(v->v, sizeof(v->v[0]) * (v->s + 2));    \
   }                                                  \
 }
 

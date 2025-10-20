@@ -19,9 +19,10 @@ EX_HEADERS := $(SRC_DIR)/config.h $(SRC_DIR)/vecs.h
 DATE          := $(shell date "+%Y-%m-%d")
 
 	
-# COMPILE_FLAGS := -ggdb3 -Og -Wall -march=native -mtune=native -fmodulo-sched  \
 
-COMPILE_FLAGS := -ggdb3 -Og -Wall -march=x86-64 -mtune=x86-64 -fmodulo-sched \
+# COMPILE_FLAGS := -ggdb3 -Og -Wall -march=x86-64 -mtune=x86-64 -fmodulo-sched # This is here to test with Valgrind which doesn't support avx512
+
+COMPILE_FLAGS := -ggdb3 -Og -Wall -march=native -mtune=native -fmodulo-sched  \
 					       -fstack-clash-protection -pthread -pipe \
 					       -fkeep-inline-functions -D_FORTIFY_SOURCE=2 -D_GNU_SOURCE \
 								 -I/usr/include/freetype2 -I/usr/include/libpng16 -I/usr/include/harfbuzz \
